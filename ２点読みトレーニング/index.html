@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>読解速度・理解度測定ツール（縦書き・Enter操作・横長）</title>
+  <style>
+    body {
+      font-family: "游明朝", "Yu Mincho", "Hiragino Mincho ProN", serif;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 16px;
+      line-height: 1.8;
+      background-color: #f7f7f7;
+    }
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+    .panel {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 10px 0 16px;
+      background: #fafafa;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    label {
+      font-size: 0.9rem;
+    }
+    input[type="text"], select {
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 0.9rem;
+    }
+    #textBox {
+      height: 500px;
+      padding: 20px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #ddd;
+      font-size: 1.05rem;
+
+      /* 縦書き・横長紙面 */
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      column-count: 3;
+      column-gap: 50px;
+
+      overflow-x: auto;
+      overflow-y: hidden;
+      margin: 0 auto;
+    }
+    #status {
+      font-size: 0.9rem;
+      color: #444;
+      margin-top: 4px;
+    }
+    #result {
+      margin-top: 10px;
+      font-size: 0.96rem;
+    }
+    #quizContainer {
+      margin-top: 16px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #ddd;
+      font-size: 0.9rem;
+    }
+    #csvArea {
+      margin-top: 16px;
+      font-size: 0.85rem;
+    }
+    .label-inline {
+      font-size: 0.85rem;
+      color: #555;
+      margin-right: 4px;
+    }
+    button {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #6b7280;
+    }
+  </style>
+</head>
+<body>
+<h1>読解速度・理解度測定ツール</h1>
+
+<div class="panel">
+  <div class="row">
+    <label class="label-inline">被験者ID：</label>
+    <input type="text" id="participantId" placeholder="例：S001">
+    <label class="label-inline">条件：</label>
+    <select id="conditionSelect">
+      <option value="">選択してください</option>
+      <option value="vertical_multi">縦書き・3列</option>
+      <option value="vertical_single">縦書き・1列</option>
+      <option value="horizontal">横書き</option>
+      <option value="other">その他（下に入力）</option>
+    </select>
+    <input type="text" id="conditionCustom" placeholder="条件名を入力" style="display:none;">
+  </div>
+
+  <div class="row">
+    <label class="label-inline">文章選択：</label>
+    <select id="textSelect">
+      <option value="sample1">文章1</option>
+      <option value="sample2">文章2</option>
+      <option value="sample3">文章3</option>
+      <option value="sample4">文章4</option>
+      <option value="sample5">文章5</option>
+      <option value="sample6">文章6</option>
+    </select>
+    <button id="loadBtn">文章を表示</button>
+  </div>
+
+  <div id="status">
+    ① 被験者IDと条件を設定 → ② 文章を表示 → ③ Enterキーで開始 → 読み終わったらEnterキーで終了 → ④ 理解度テストに回答 → 結果が自動でCSVに追加されます。
+  </div>
+</div>
+
+<div id="textBox"></div>
+<div id="result"></div>
+<div id="quizContainer"></div>
+
+<div id="csvArea">
+  <button id="downloadCsvBtn" class="secondary">結果CSVをダウンロード</button>
+  <div id="csvInfo">※各試行の終了＋理解度回答ごとに、自動で結果が蓄積されます。</div>
+</div>
+
+<script>
+  // ----------- 課題文 -----------
+  const passages = {
+    sample1: `地球規模での気候変動は、異常気象の増加や生態系の破壊など、人類が直面する最も深刻な課題の一つである。この気候変動の主な原因は、産業革命以降の化石燃料の大量消費に伴う温室効果ガスの排出量の急増にある。国際社会は、2015年のパリ協定を通じて、平均気温の上昇を産業革命以前に比べて2℃より十分に低く抑える目標を共有した。目標達成のためには、各国が再生可能エネルギーへの転換を加速させ、二酸化炭素の排出を実質ゼロにするカーボンニュートラルを目指す必要がある。また、企業や個人レベルでも、リサイクルの徹底や環境負荷の低い製品を選ぶなど、ライフスタイルを見直すことが求められる。これらは、現在の世代のニーズを満たしつつ、未来の世代のニーズを損なわない持続可能な開発（SDGs）の理念に基づいている。私たちは、この複雑な課題に対し、科学技術の進歩と国際的な協調、そして市民一人ひとりの意識改革を通じて立ち向かうべきである。`,
+    sample2: `現代社会における民主主義は、市民が政治に参加し、その意思を反映させるための最も基本的な統治形態として機能している。しかし近年、SNSを通じた虚偽情報（フェイクニュース）の拡散や、ポピュリズムの台頭により、熟議に基づく民主的な意思決定が困難になっている。特に、インターネット環境が整備されたことで、情報が瞬時に広がる反面、異なる意見を持つ人々が分断され、対話が失われがちである。このような状況は、市民が政治に対する信頼を失い、投票率の低下や政治的無関心を引き起こす一因となっている。民主主義を維持し、さらに発展させるためには、教育を通じて市民のメディア・リテラシーを高めることが急務である。また、政治家は、短期的な利益追求ではなく、長期的な視点に立ち、透明性のある説明責任を果たす必要がある。最終的に、健全な民主主義は、市民一人ひとりが積極的に情報を批判的に検討し、責任ある行動をとるという意識の上に成り立っている。`,
+    sample3: `ゲノム編集技術は、生命科学における飛躍的なブレイクスルーであり、生物の遺伝子を狙った通りに改変することを可能にした。この技術の応用は広範であり、特に難病の治療法開発や、品種改良による食糧生産の安定化に大きな期待が寄せられている。例えば、従来の治療法では困難だった遺伝性の疾患に対して、根本的な遺伝子の修正を行うジーン・セラピーの可能性が開かれている。しかし、ゲノム編集は、ヒトの生殖細胞（卵子や精子）に適用された場合、その改変が次世代以降に受け継がれるという重大な倫理的問題を提起する。したがって、意図しない副作用や、人類の遺伝的多様性を損なう可能性を考慮し、国際的な議論と厳格な規制が求められている。技術の進歩を最大限に活かしつつ、生命の尊厳と社会の公平性をどのように守っていくかが、科学者だけでなく社会全体の課題である。私たちは、技術の利便性と倫理的な境界線を常に意識しながら、この革新的なツールと慎重に向き合っていく必要がある。`,
+    sample4: `グローバル経済の進展は、国際貿易と投資の自由化を促し、多くの国々で経済成長と生活水準の向上をもたらした。特に、新興国の生産拠点化や、インターネットを通じた国境を越えた取引は、世界全体の効率と富の総量を増大させた。しかし、同時に、資本と労働の移動の自由化は、各国間の賃金格差の拡大や、国内での富の偏在という負の側面を露呈している。技術革新、特にAIやロボットによる自動化は、高技能労働者の需要を高める一方で、定型的な労働者の雇用を脅かす結果となっている。このように拡大する経済格差は、社会の不安定化や、人々の教育・医療へのアクセス格差を生み出し、社会の分断を深めている。この問題に対処するためには、再分配機能の強化（累進課税や社会保障）や、生涯を通じた職業訓練への投資が必要である。国際社会と各国政府は、自由な市場経済の恩恵を維持しつつ、経済的な公平性を担保するための新たな仕組みを構築しなければならない。`,
+    sample5: `グローバル化の進展に伴い、異なる文化的背景を持つ人々が共存する多文化共生社会の実現が世界的なテーマとなっている。多文化社会は、多様な価値観や独自の創造性が交わることで、社会全体に活力とイノベーションをもたらす潜在力を持っている。しかし、異なる文化や習慣が接触する過程で、摩擦や誤解が生じることもあり、排他的なナショナリズムが台頭する原因ともなり得る。文化的なアイデンティティを守りつつ、他者への敬意と理解をもって共存するためには、相互学習と対話が不可欠である。特に学校教育においては、他文化をステレオタイプで捉えるのではなく、その歴史的・社会的背景を深く理解する機会を提供すべきである。また、芸術やメディアは、異文化間の共感と橋渡しをする強力なツールとして機能し、多様性の価値を伝えることができる。多文化共生は、単に異なる人々を許容することではなく、互いの違いを肯定的に評価し、共有の社会を共に築くための積極的なプロセスである。`,
+    sample6: `哲学における自由意志の問題は、「人間は本当に自分の意志で行動を選択しているのか」という根源的な問いを扱う。決定論の立場によれば、宇宙のすべての出来事、したがって人間の行動も、過去の出来事と自然法則によって完全に決定されていると考える。もし決定論が真実であれば、私たちの「選択した」という感覚は錯覚に過ぎず、罰や報酬といった道徳的責任の概念が根底から揺らぐことになる。一方、自由意志論は、人間には複数の可能性の中から自律的に行動を選ぶ能力があり、それゆえに道徳的責任を負うことができると主張する。現代の脳科学や心理学の進展は、意思決定が無意識下の脳活動に先行することを示唆し、この議論に新たな論点を提供した。この二つの立場を調停しようとする両立論は、自由と決定は矛盾しないとし、責任は理性的な行動能力に依存すると説く。結局のところ、自由意志の問題は、自己の存在と社会的な規範の根拠に関わるものであり、私たちは常にこの問いと向き合い続ける必要がある。`
+  };
+
+  // ----------- 理解度テスト（例：各文1問）-----------
+  const quizzes = {
+    sample1: [
+      {
+        q: "この文章で述べられている主な課題はどれか。",
+        options: [
+          "人口減少による労働力不足",
+          "地球温暖化を含む気候変動問題",
+          "森林伐採による紙資源の不足",
+          "エネルギー自給率の低下"
+        ],
+        correct: 1
+      }
+    ],
+    sample2: [
+      {
+        q: "民主主義にとって脅威として挙げられているものはどれか。",
+        options: [
+          "交通インフラの老朽化",
+          "紙媒体の新聞の減少",
+          "フェイクニュースや分断の拡大",
+          "選挙制度の単純化"
+        ],
+        correct: 2
+      }
+    ],
+    sample3: [
+      {
+        q: "ゲノム編集に関して特に懸念されている点はどれか。",
+        options: [
+          "技術が安価であること",
+          "ヒト生殖細胞への適用による影響の世代間継承",
+          "農作物の収穫量が減ること",
+          "治療法がすぐ完成すること"
+        ],
+        correct: 1
+      }
+    ],
+    sample4: [
+      {
+        q: "グローバル経済の負の側面として挙げられているものはどれか。",
+        options: [
+          "世界人口の減少",
+          "賃金格差や富の偏在の拡大",
+          "観光産業の衰退",
+          "文化交流の減少"
+        ],
+        correct: 1
+      }
+    ],
+    sample5: [
+      {
+        q: "多文化共生社会において重要とされている態度はどれか。",
+        options: [
+          "他文化を自国文化に同化させること",
+          "他文化への無関心を保つこと",
+          "相互学習と対話による理解と尊重",
+          "特定文化のみを優遇すること"
+        ],
+        correct: 2
+      }
+    ],
+    sample6: [
+      {
+        q: "自由意志の問題に関連して述べられている現代の知見はどれか。",
+        options: [
+          "意思決定は常に完全に意識的である",
+          "宇宙には法則性が存在しない",
+          "脳活動が意思の自覚より先行することが示唆されている",
+          "道徳的責任は不要であると結論づけられている"
+        ],
+        correct: 2
+      }
+    ]
+  };
+
+  const textSelect = document.getElementById('textSelect');
+  const loadBtn = document.getElementById('loadBtn');
+  const textBox = document.getElementById('textBox');
+  const statusSpan = document.getElementById('status');
+  const resultDiv = document.getElementById('result');
+  const quizContainer = document.getElementById('quizContainer');
+  const participantIdInput = document.getElementById('participantId');
+  const conditionSelect = document.getElementById('conditionSelect');
+  const conditionCustom = document.getElementById('conditionCustom');
+  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+
+  let currentText = "";
+  let currentPassageKey = "sample1";
+  let startTime = null;
+  let running = false;
+  let canStart = true; // 「文章表示」直後だけ開始可能
+  let lastMeasurement = null; // 読了結果をクイズ集計まで保持
+  const allResults = []; // CSV用に全試行分を保存
+
+  // 条件「その他」表示切り替え
+  conditionSelect.addEventListener('change', () => {
+    if (conditionSelect.value === 'other') {
+      conditionCustom.style.display = 'inline-block';
+    } else {
+      conditionCustom.style.display = 'none';
+      conditionCustom.value = "";
+    }
+  });
+
+  function getConditionLabel() {
+    const v = conditionSelect.value;
+    if (!v) return "";
+    if (v === 'other') return conditionCustom.value.trim();
+    const selected = conditionSelect.options[conditionSelect.selectedIndex];
+    return selected ? selected.textContent.trim() : v;
+  }
+
+  // 文字数カウント（空白除去・記号は含める：必要ならここで調整）
+  function countChars(text) {
+    return text.replace(/\s/g, "").length;
+  }
+
+  function resetMeasurement() {
+    startTime = null;
+    running = false;
+    resultDiv.textContent = "";
+    quizContainer.innerHTML = "";
+    lastMeasurement = null;
+    canStart = true;
+  }
+
+  // 課題文表示
+  loadBtn.addEventListener('click', () => {
+    const key = textSelect.value;
+    const text = passages[key] || "";
+    if (!text) {
+      alert("文章が見つかりません。");
+      return;
+    }
+    currentPassageKey = key;
+    currentText = text;
+    textBox.textContent = currentText;
+    resetMeasurement();
+    statusSpan.textContent = "文章を表示しました。Enterキーで測定開始、読み終わったらもう一度Enterキーで読了してください。";
+  });
+
+  // 理解度テスト描画
+  function renderQuiz(passageKey) {
+    const qs = quizzes[passageKey];
+    if (!qs || qs.length === 0) {
+      quizContainer.innerHTML = "<p>この文章には理解度テストは設定されていません。</p>";
+      return;
+    }
+
+    let html = "<h3>理解度テスト</h3><form id='quizForm'>";
+    qs.forEach((item, idx) => {
+      html += `<div style="margin-bottom:8px;">
+        <div>${idx + 1}. ${item.q}</div>`;
+      item.options.forEach((opt, oi) => {
+        const id = `q${idx}_opt${oi}`;
+        html += `
+          <div>
+            <label>
+              <input type="radio" name="q${idx}" value="${oi}">
+              ${opt}
+            </label>
+          </div>`;
+      });
+      html += `</div>`;
+    });
+    html += `<button type="submit">理解度回答を送信（結果を記録）</button></form>`;
+    quizContainer.innerHTML = html;
+
+    const quizForm = document.getElementById('quizForm');
+    quizForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!lastMeasurement) {
+        alert("読解測定結果がありません。先に読了まで行ってください。");
+        return;
+      }
+
+      const pid = participantIdInput.value.trim();
+      const condLabel = getConditionLabel();
+
+      if (!pid) {
+        alert("被験者IDを入力してください。");
+        return;
+      }
+      if (!condLabel) {
+        alert("条件を選択または入力してください。");
+        return;
+      }
+
+      let answeredAll = true;
+      let correctCount = 0;
+
+      quizzes[passageKey].forEach((item, idx) => {
+        const v = quizForm[`q${idx}`].value;
+        if (v === undefined || v === "") {
+          answeredAll = false;
+        } else if (parseInt(v, 10) === item.correct) {
+          correctCount++;
+        }
+      });
+
+      if (!answeredAll) {
+        alert("すべての設問に回答してください。");
+        return;
+      }
+
+      const totalQ = quizzes[passageKey].length;
+      const accuracy = correctCount / totalQ;
+
+      // 結果オブジェクト作成・保存
+      const record = {
+        participant_id: pid,
+        condition: condLabel,
+        passage_key: lastMeasurement.passageKey,
+        passage_label: textSelect.options[textSelect.selectedIndex].textContent.trim(),
+        char_count: lastMeasurement.charCount,
+        read_time_sec: lastMeasurement.sec.toFixed(2),
+        cpm: lastMeasurement.cpm.toFixed(2),
+        question_count: totalQ,
+        correct_count: correctCount,
+        accuracy: accuracy.toFixed(2),
+        timestamp: new Date().toISOString()
+      };
+
+      allResults.push(record);
+
+      quizContainer.innerHTML += `<p>理解度：${correctCount}/${totalQ}問正解（正答率 ${(accuracy * 100).toFixed(1)}%）として記録しました。</p>`;
+      statusSpan.textContent = "この試行の結果を保存しました。新しい試行を行う場合は、再度「文章を表示」から始めてください。";
+      lastMeasurement = null; // 二重登録防止
+    });
+  }
+
+  // Enterキーで開始／終了
+  document.addEventListener('keydown', (e) => {
+    // 日本語入力中のEnter（変換確定）は無視
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+
+    if (!currentText) {
+      alert("先に文章を表示してください。");
+      return;
+    }
+
+    if (!running) {
+      // 測定開始：文章表示直後のみ
+      if (!canStart) return;
+      startTime = performance.now();
+      running = true;
+      canStart = false;
+      resultDiv.textContent = "";
+      quizContainer.innerHTML = "";
+      lastMeasurement = null;
+      statusSpan.textContent = "測定中：読み終わったらEnterキーで終了してください。";
+    } else {
+      // 測定終了
+      const endTime = performance.now();
+      running = false;
+
+      const ms = endTime - startTime;
+      const sec = ms / 1000;
+      const minutes = sec / 60;
+      const charCount = countChars(currentText);
+      const cpm = charCount / minutes;
+
+      lastMeasurement = {
+        passageKey: currentPassageKey,
+        sec,
+        charCount,
+        cpm
+      };
+
+      resultDiv.innerHTML = `
+        読了時間：${sec.toFixed(1)} 秒<br>
+        文字数（空白除く）：${charCount} 文字<br>
+        読解速度：${cpm.toFixed(1)} 文字/分
+      `;
+
+      statusSpan.textContent = "読解測定完了。次に理解度テストに回答してください。回答送信でこの試行がCSVに記録されます。";
+
+      // 理解度テスト表示
+      renderQuiz(currentPassageKey);
+    }
+  });
+
+  // CSV生成＆ダウンロード
+  function buildCsv() {
+    if (allResults.length === 0) {
+      alert("まだ記録された結果がありません。");
+      return null;
+    }
+    const header = [
+      "participant_id",
+      "condition",
+      "passage_key",
+      "passage_label",
+      "char_count",
+      "read_time_sec",
+      "cpm",
+      "question_count",
+      "correct_count",
+      "accuracy",
+      "timestamp"
+    ];
+
+    const lines = [header.join(",")];
+
+    allResults.forEach(r => {
+      const row = [
+        r.participant_id,
+        r.condition,
+        r.passage_key,
+        r.passage_label,
+        r.char_count,
+        r.read_time_sec,
+        r.cpm,
+        r.question_count,
+        r.correct_count,
+        r.accuracy,
+        r.timestamp
+      ].map(v => {
+        const s = String(v ?? "");
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      });
+      lines.push(row.join(","));
+    });
+
+    return lines.join("\n");
+  }
+
+  downloadCsvBtn.addEventListener('click', () => {
+    const csv = buildCsv();
+    if (!csv) return;
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "reading_results.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // 初期状態
+  (function init() {
+    currentText = passages.sample1;
+    currentPassageKey = "sample1";
+    textBox.textContent = currentText;
+    startTime = null;
+    running = false;
+    canStart = true;
+    statusSpan.textContent = "文章1を表示中。被験者IDと条件を設定し、Enterキーで測定開始できます。";
+  })();
+</script>
+</body>
+</html>
